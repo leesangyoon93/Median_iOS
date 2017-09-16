@@ -7,16 +7,74 @@
 //
 
 import UIKit
+import Firebase
+import GoogleSignIn
+import FirebaseMessaging
+import UserNotifications
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
-
+    static var isMenuOpen = true
+    let gcmMessageIDKey = "AIzaSyC69hAdVgC49R5YKNBJbPgjNcu83zpSnJI";
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplicationLaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
+        
+        FIRApp.configure()
+        GIDSignIn.sharedInstance().clientID = FIRApp.defaultApp()?.options.clientID
+        FIRAuth.auth()?.addStateDidChangeListener { auth, user in
+            if user != nil {
+                print("Automatic Sign In: \(user?.email ?? "")")
+                self.setUserData((user?.uid)!)
+                self.moveMainVC()
+                
+                FIRMessaging.messaging().subscribe(toTopic: "mediaNotice")
+                FIRMessaging.messaging().subscribe(toTopic: "studentNotice")
+
+            } else {
+                let storyboard = UIStoryboard(name: "Main", bundle: nil)
+                let initialViewController = storyboard.instantiateViewController(withIdentifier: "IndexViewController")
+                self.window!.rootViewController = initialViewController
+            }
+        }
+
         return true
+    }
+    
+    func setUserData(_ uid: String) {
+        let ref = FIRDatabase.database().reference()
+        let userRef = ref.child("User").child(uid)
+        userRef.observeSingleEvent(of: .value, with: { (snapshot) in
+            if let dic = snapshot.value as? [String: AnyObject] {
+                let user = UserDefaults.standard
+                user.set(snapshot.key , forKey: "uid")
+                user.set(dic["name"] as! String, forKey: "name")
+                user.set(dic["admin"] as! Bool, forKey: "admin")
+                user.set(dic["subscribeMediaNotice"] as! Bool, forKey: "isMediaNoticeAgree")
+                user.set(dic["subscribeStudentNotice"] as! Bool, forKey: "isStudentNoticeAgree")
+            }
+        }, withCancel: { (error) in
+            print(error)
+        })
+    }
+
+    
+    func application(_ application: UIApplication, open url: URL, options: [UIApplicationOpenURLOptionsKey : Any] = [:]) -> Bool {
+        let handled: Bool = GIDSignIn.sharedInstance().handle(url, sourceApplication: options[UIApplicationOpenURLOptionsKey.sourceApplication] as! String!, annotation: options[UIApplicationOpenURLOptionsKey.annotation])
+        
+        return handled
+    }
+
+    func moveMainVC() {
+        let storyboard = UIStoryboard(name: "Main", bundle: nil)
+        let initialViewController = storyboard.instantiateViewController(withIdentifier: "MainTabViewController")
+        self.window!.rootViewController = initialViewController
+    }
+    
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        return UIInterfaceOrientationMask(rawValue: UIInterfaceOrientationMask.portrait.rawValue)
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
@@ -39,6 +97,43 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationWillTerminate(_ application: UIApplication) {
         // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
+    }
+
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) {
+        // If you are receiving a notification message while your app is in the background,
+        // this callback will not be fired till the user taps on the notification launching the application.
+        // TODO: Handle data of notification
+        
+        // With swizzling disabled you must let Messaging know about the message, for Analytics
+        // Messaging.messaging().appDidReceiveMessage(userInfo)
+        
+        // Print message ID.
+        if let messageID = userInfo[gcmMessageIDKey] {
+            print("Message ID: \(messageID)")
+        }
+        
+        // Print full message.
+        print(userInfo)
+    }
+    
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        // If you are receiving a notification message while your app is in the background,
+        // this callback will not be fired till the user taps on the notification launching the application.
+        // TODO: Handle data of notification
+        
+        // With swizzling disabled you must let Messaging know about the message, for Analytics
+        // Messaging.messaging().appDidReceiveMessage(userInfo)
+        
+        // Print message ID.
+        if let messageID = userInfo[gcmMessageIDKey] {
+            print("Message ID: \(messageID)")
+        }
+        
+        // Print full message.
+        print(userInfo)
+        
+        completionHandler(UIBackgroundFetchResult.newData)
     }
 
 
